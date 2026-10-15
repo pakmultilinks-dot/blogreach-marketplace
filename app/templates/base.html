@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}BlogReach{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="/">BlogReach</a>
+    <nav class="main-nav">
+      <a href="/marketplace">Marketplace</a>
+      {% if user %}
+        <a href="/dashboard">Dashboard</a>
+        {% if user.role == "admin" %}
+          <a href="/admin/orders">Admin</a>
+        {% endif %}
+        <span class="user-chip">{{ user.name }} ({{ user.role }})</span>
+        <form method="post" action="/logout" class="inline-form">
+          <button class="btn btn-small" type="submit">Logout</button>
+        </form>
+      {% else %}
+        <a href="/login">Login</a>
+        <a href="/register" class="btn btn-small">Sign up</a>
+      {% endif %}
+    </nav>
+  </div>
+</header>
+<main class="container">
+  {% if message %}
+    <div class="flash">{{ message }}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="site-footer">
+  <div class="container">BlogReach demo marketplace. Mock payments only, no real charges.</div>
+</footer>
+</body>
+</html>

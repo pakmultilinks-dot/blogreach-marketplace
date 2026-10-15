@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}BlogReach - Guest Post Placement Marketplace{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Buy and sell guest post placements</h1>
+  <p class="lead">Publishers list their websites with pricing and guidelines.
+     Advertisers browse, order placements, and track every order from request to published link.</p>
+  <div class="hero-actions">
+    <a class="btn" href="/marketplace">Browse marketplace</a>
+    {% if not user %}
+      <a class="btn btn-outline" href="/register">Create free account</a>
+    {% endif %}
+  </div>
+</section>
+
+<section>
+  <h2>How it works</h2>
+  <div class="steps">
+    <div class="step"><h3>1. Publishers list sites</h3><p>Add your website with niche, price, turnaround time and editorial guidelines.</p></div>
+    <div class="step"><h3>2. Advertisers order</h3><p>Filter listings, submit a brief with your target URL and anchor text, then pay (mock checkout).</p></div>
+    <div class="step"><h3>3. Track to published</h3><p>Orders move through requested, accepted, in progress, delivered and completed, with email updates at each step.</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>Featured listings</h2>
+  {% if listings %}
+    <div class="cards">
+      {% for l in listings %}
+        <article class="card">
+          <h3><a href="/listings/{{ l.id }}">{{ l.site_name }}</a></h3>
+          <p class="muted">{{ l.niche }}{% if l.da_score %} - DA {{ l.da_score }}{% endif %}</p>
+          <p class="price">${{ "%.2f"|format(l.price_usd) }}</p>
+          <p class="muted">{{ l.turnaround_days }} day turnaround</p>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No listings yet. Publishers can add the first one after signing up.</p>
+  {% endif %}
+</section>
+{% endblock %}

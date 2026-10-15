@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - BlogReach{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<p class="muted">Signed in as {{ user.name }} ({{ user.email }}) with role: <strong>{{ user.role }}</strong></p>
+
+{% if user.role == "publisher" %}
+  <section>
+    <h2>My listings</h2>
+    <p><a class="btn btn-small" href="/listings/new">Add new listing</a></p>
+    <p class="muted">Listing management is coming in the next build step.</p>
+  </section>
+{% elif user.role == "advertiser" %}
+  <section>
+    <h2>My orders</h2>
+    <p class="muted">Order tracking is coming in the next build step. <a href="/marketplace">Browse the marketplace</a> to get started.</p>
+  </section>
+{% elif user.role == "admin" %}
+  <section>
+    <h2>Admin</h2>
+    <p><a class="btn btn-small" href="/admin/orders">View all orders</a>
+       <a class="btn btn-small btn-outline" href="/admin/email-log">View email log</a></p>
+  </section>
+{% endif %}
+{% endblock %}
