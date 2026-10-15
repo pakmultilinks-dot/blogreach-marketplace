@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Email log - Admin{% endblock %}
+{% block content %}
+<h1>Email log</h1>
+<p class="muted">Every notification sent by the platform. Default backend stores emails here and prints them to stdout (no real emails sent).</p>
+
+{% if emails %}
+  <table class="data">
+    <tr><th>ID</th><th>To</th><th>Subject</th><th>Order</th><th>Sent at (UTC)</th></tr>
+    {% for e in emails %}
+      <tr>
+        <td>{{ e.id }}</td>
+        <td>{{ e.to_email }}</td>
+        <td>{{ e.subject }}</td>
+        <td>{% if e.related_order_id %}<a href="/orders/{{ e.related_order_id }}">#{{ e.related_order_id }}</a>{% else %}-{% endif %}</td>
+        <td>{{ e.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      </tr>
+      <tr>
+        <td></td>
+        <td colspan="4"><pre class="email-body">{{ e.body }}</pre></td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p class="muted">No emails sent yet.</p>
+{% endif %}
+{% endblock %}

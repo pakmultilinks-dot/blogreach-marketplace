@@ -437,6 +437,42 @@ def order_change_status(
     return RedirectResponse(f"/orders/{order.id}?msg=Status+updated", status_code=303)
 
 
+# ---------- Admin ----------
+
+def admin_or_403(request: Request, db: Session):
+    user, redirect = current_user_or_redirect(request, db)
+    if redirect:
+        return None, redirect
+    if user.role != "admin":
+        return None, render(request, "error.html", db,
+                            message="Admin access only.", status_code=403)
+    return user, None
+
+
+@app.get("/admin/orders", response_class=HTMLResponse)
+def admin_orders(request: Request, status: str = "", db: Session = Depends(get_db)):
+    _, denied = admin_or_403(request, db)
+    if denied:
+        return denied
+    query = db.query(models.Order).order_by(models.Order.created_at.desc())
+    if status in orders_mod.STATUSES:
+        query = query.filter(models.Order.status == status)
+    return render(request, "admin_orders.html", db, {
+        "orders": query.all(),
+        "statuses": orders_mod.STATUSES,
+        "status_filter": status,
+    })
+
+
+@app.get("/admin/email-log", response_class=HTMLResponse)
+def admin_email_log(request: Request, db: Session = Depends(get_db)):
+    _, denied = admin_or_403(request, db)
+    if denied:
+        return denied
+    emails = db.query(models.EmailLog).order_by(models.EmailLog.created_at.desc()).all()
+    return render(request, "admin_email_log.html", db, {"emails": emails})
+
+
 # ---------- Mock payment ----------
 
 @app.get("/orders/{order_id}/pay", response_class=HTMLResponse)

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}All orders - Admin{% endblock %}
+{% block content %}
+<h1>All orders</h1>
+<form method="get" action="/admin/orders" class="filters">
+  <label>Status
+    <select name="status">
+      <option value="">All statuses</option>
+      {% for s in statuses %}
+        <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s.replace("_", " ") }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="btn btn-small" type="submit">Filter</button>
+</form>
+
+{% if orders %}
+  <table class="data">
+    <tr><th>ID</th><th>Site</th><th>Advertiser</th><th>Publisher</th><th>Price</th><th>Status</th><th>Paid</th><th></th></tr>
+    {% for o in orders %}
+      <tr>
+        <td>#{{ o.id }}</td>
+        <td>{{ o.listing.site_name }}</td>
+        <td>{{ o.advertiser.name }}</td>
+        <td>{{ o.publisher.name }}</td>
+        <td>${{ "%.2f"|format(o.listing.price_usd) }}</td>
+        <td><span class="status status-{{ o.status }}">{{ o.status.replace("_", " ") }}</span></td>
+        <td>{% if o.mock_payment_ref %}yes{% else %}no{% endif %}</td>
+        <td><a href="/orders/{{ o.id }}">View</a></td>
+      </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p class="muted">No orders found.</p>
+{% endif %}
+{% endblock %}
