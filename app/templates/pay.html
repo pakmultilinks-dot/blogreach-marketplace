@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Mock payment - BlogReach{% endblock %}
+{% block content %}
+<h1>Mock checkout</h1>
+
+<div class="mock-notice">
+  <strong>This is a mock payment page.</strong> No real money moves here.
+  The card fields below are not validated and nothing is stored.
+  Clicking pay just records a fake reference like MOCK-ABC123.
+</div>
+
+<div class="panel" style="max-width: 560px;">
+  <h2>Order summary</h2>
+  <p><strong>Site:</strong> {{ order.listing.site_name }}</p>
+  <p><strong>Price:</strong> ${{ "%.2f"|format(order.listing.price_usd) }}</p>
+  <p><strong>Turnaround:</strong> {{ order.listing.turnaround_days }} days</p>
+
+  <form method="post" action="/orders/{{ order.id }}/pay" class="form-card" style="border:none;padding:0;">
+    <label>Cardholder name
+      <input type="text" name="card_name" placeholder="Jane Doe" autocomplete="off">
+    </label>
+    <label>Card number
+      <input type="text" name="card_number" placeholder="4111 1111 1111 1111" autocomplete="off">
+    </label>
+    <label>Expiry
+      <input type="text" name="card_expiry" placeholder="12/28" autocomplete="off">
+    </label>
+    <label>CVC
+      <input type="text" name="card_cvc" placeholder="123" autocomplete="off">
+    </label>
+    <button class="btn" type="submit">Pay ${{ "%.2f"|format(order.listing.price_usd) }} (mock)</button>
+  </form>
+  <p class="muted">Nothing is charged. Card details are discarded immediately.</p>
+</div>
+{% endblock %}

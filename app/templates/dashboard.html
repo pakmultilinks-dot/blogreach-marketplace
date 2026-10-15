@@ -27,12 +27,44 @@
   </section>
   <section>
     <h2>Incoming orders</h2>
-    <p class="muted">Order management is coming in the next build step.</p>
+    {% if incoming_orders %}
+      <table class="data">
+        <tr><th>ID</th><th>Site</th><th>Advertiser</th><th>Status</th><th>Paid</th><th></th></tr>
+        {% for o in incoming_orders %}
+          <tr>
+            <td>#{{ o.id }}</td>
+            <td>{{ o.listing.site_name }}</td>
+            <td>{{ o.advertiser.name }}</td>
+            <td><span class="status status-{{ o.status }}">{{ o.status.replace("_", " ") }}</span></td>
+            <td>{% if o.mock_payment_ref %}yes{% else %}no{% endif %}</td>
+            <td><a href="/orders/{{ o.id }}">View</a></td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">No orders yet.</p>
+    {% endif %}
   </section>
 {% elif user.role == "advertiser" %}
   <section>
     <h2>My orders</h2>
-    <p class="muted">Order tracking is coming in the next build step. <a href="/marketplace">Browse the marketplace</a> to get started.</p>
+    {% if my_orders %}
+      <table class="data">
+        <tr><th>ID</th><th>Site</th><th>Price</th><th>Status</th><th>Paid</th><th></th></tr>
+        {% for o in my_orders %}
+          <tr>
+            <td>#{{ o.id }}</td>
+            <td>{{ o.listing.site_name }}</td>
+            <td>${{ "%.2f"|format(o.listing.price_usd) }}</td>
+            <td><span class="status status-{{ o.status }}">{{ o.status.replace("_", " ") }}</span></td>
+            <td>{% if o.mock_payment_ref %}yes{% else %}no{% endif %}</td>
+            <td><a href="/orders/{{ o.id }}">View</a></td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">You have no orders yet. <a href="/marketplace">Browse the marketplace</a> to place one.</p>
+    {% endif %}
   </section>
 {% elif user.role == "admin" %}
   <section>

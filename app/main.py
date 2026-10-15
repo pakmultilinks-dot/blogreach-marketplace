@@ -1,4 +1,5 @@
 import os
+import uuid
 from pathlib import Path
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -7,6 +8,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from . import models
+from . import orders as orders_mod
 from .auth import (
     get_current_user,
     hash_password,
@@ -148,6 +150,19 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             db.query(models.Listing)
             .filter(models.Listing.publisher_id == user.id)
             .order_by(models.Listing.created_at.desc())
+            .all()
+        )
+        ctx["incoming_orders"] = (
+            db.query(models.Order)
+            .filter(models.Order.publisher_id == user.id)
+            .order_by(models.Order.created_at.desc())
+            .all()
+        )
+    elif user.role == "advertiser":
+        ctx["my_orders"] = (
+            db.query(models.Order)
+            .filter(models.Order.advertiser_id == user.id)
+            .order_by(models.Order.created_at.desc())
             .all()
         )
     return render(request, "dashboard.html", db, ctx)
@@ -338,3 +353,114 @@ def listing_activate(request: Request, listing_id: int, db: Session = Depends(ge
     listing.is_active = True
     db.commit()
     return RedirectResponse(f"/listings/{listing.id}?msg=Listing+activated", status_code=303)
+
+
+# ---------- Orders ----------
+
+@app.post("/listings/{listing_id}/orders")
+def order_create(
+    request: Request,
+    listing_id: int,
+    brief: str = Form(...),
+    target_url: str = Form(...),
+    anchor_text: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user, redirect = current_user_or_redirect(request, db)
+    if redirect:
+        return redirect
+    if user.role != "advertiser":
+        return render(request, "error.html", db,
+                      message="Only advertisers can place orders.", status_code=403)
+    listing = db.query(models.Listing).filter(models.Listing.id == listing_id).first()
+    if not listing:
+        return render(request, "error.html", db, message="Listing not found.", status_code=404)
+    if not listing.is_active:
+        return render(request, "error.html", db,
+                      message="This listing is not active.", status_code=400)
+    order = models.Order(
+        listing_id=listing.id,
+        advertiser_id=user.id,
+        publisher_id=listing.publisher_id,
+        brief=brief.strip(),
+        target_url=target_url.strip(),
+        anchor_text=anchor_text.strip(),
+        status="requested",
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    orders_mod._notify(db, order, "requested")
+    return RedirectResponse(f"/orders/{order.id}/pay?msg=Order+created", status_code=303)
+
+
+def order_visible_or_403(request: Request, db: Session, order_id: int):
+    user, redirect = current_user_or_redirect(request, db)
+    if redirect:
+        return None, None, redirect
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        return None, None, render(request, "error.html", db,
+                                  message="Order not found.", status_code=404)
+    if user.role != "admin" and user.id not in (order.advertiser_id, order.publisher_id):
+        return None, None, render(request, "error.html", db,
+                                  message="You cannot view this order.", status_code=403)
+    return user, order, None
+
+
+@app.get("/orders/{order_id}", response_class=HTMLResponse)
+def order_detail(request: Request, order_id: int, db: Session = Depends(get_db)):
+    user, order, denied = order_visible_or_403(request, db, order_id)
+    if denied:
+        return denied
+    return render(request, "order_detail.html", db, {
+        "order": order,
+        "statuses": orders_mod.STATUSES,
+        "next_actions": orders_mod.allowed_next(order, user),
+    })
+
+
+@app.post("/orders/{order_id}/status")
+def order_change_status(
+    request: Request,
+    order_id: int,
+    new_status: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user, order, denied = order_visible_or_403(request, db, order_id)
+    if denied:
+        return denied
+    try:
+        orders_mod.change_status(db, order, user, new_status)
+    except ValueError as exc:
+        return render(request, "error.html", db, message=str(exc), status_code=400)
+    return RedirectResponse(f"/orders/{order.id}?msg=Status+updated", status_code=303)
+
+
+# ---------- Mock payment ----------
+
+@app.get("/orders/{order_id}/pay", response_class=HTMLResponse)
+def pay_form(request: Request, order_id: int, db: Session = Depends(get_db)):
+    user, order, denied = order_visible_or_403(request, db, order_id)
+    if denied:
+        return denied
+    if user.id != order.advertiser_id and user.role != "admin":
+        return render(request, "error.html", db,
+                      message="Only the ordering advertiser can pay.", status_code=403)
+    if order.mock_payment_ref:
+        return RedirectResponse(f"/orders/{order.id}", status_code=303)
+    return render(request, "pay.html", db, {"order": order})
+
+
+@app.post("/orders/{order_id}/pay")
+def pay_submit(request: Request, order_id: int, db: Session = Depends(get_db)):
+    user, order, denied = order_visible_or_403(request, db, order_id)
+    if denied:
+        return denied
+    if user.id != order.advertiser_id and user.role != "admin":
+        return render(request, "error.html", db,
+                      message="Only the ordering advertiser can pay.", status_code=403)
+    if not order.mock_payment_ref:
+        order.mock_payment_ref = "MOCK-" + uuid.uuid4().hex[:12].upper()
+        db.commit()
+    return RedirectResponse(f"/orders/{order.id}?msg=Mock+payment+recorded", status_code=303)
