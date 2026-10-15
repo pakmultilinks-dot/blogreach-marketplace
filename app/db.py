@@ -2,7 +2,16 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./blogreach.db")
+def _default_database_url() -> str:
+    # On Vercel the deployment filesystem is read-only, so SQLite must live in /tmp.
+    # /tmp persists for warm function instances; set DATABASE_URL (Postgres) for
+    # durable production storage.
+    if os.getenv("VERCEL"):
+        return "sqlite:////tmp/blogreach.db"
+    return "sqlite:///./blogreach.db"
+
+
+DATABASE_URL = os.getenv("DATABASE_URL", _default_database_url())
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
