@@ -1,7 +1,7 @@
 import os
 import uuid
 from pathlib import Path
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from . import models
 from . import orders as orders_mod
+from . import schemas
 from .auth import (
     get_current_user,
     hash_password,
@@ -435,6 +436,128 @@ def order_change_status(
     except ValueError as exc:
         return render(request, "error.html", db, message=str(exc), status_code=400)
     return RedirectResponse(f"/orders/{order.id}?msg=Status+updated", status_code=303)
+
+
+# ---------- JSON API ----------
+
+def api_user(request: Request, db: Session = Depends(get_db)) -> models.User:
+    user = get_current_user(request, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+def _apply_listing_filters(query, niche: str, min_price: str, max_price: str, q: str):
+    if niche:
+        query = query.filter(models.Listing.niche == niche)
+    if min_price:
+        try:
+            query = query.filter(models.Listing.price_usd >= float(min_price))
+        except ValueError:
+            pass
+    if max_price:
+        try:
+            query = query.filter(models.Listing.price_usd <= float(max_price))
+        except ValueError:
+            pass
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (models.Listing.site_name.ilike(like)) | (models.Listing.niche.ilike(like))
+        )
+    return query
+
+
+@app.get("/api/listings", response_model=list[schemas.ListingOut])
+def api_listings(
+    niche: str = "",
+    min_price: str = "",
+    max_price: str = "",
+    q: str = "",
+    db: Session = Depends(get_db),
+):
+    query = _apply_listing_filters(
+        db.query(models.Listing).filter(models.Listing.is_active.is_(True)),
+        niche, min_price, max_price, q,
+    )
+    return query.order_by(models.Listing.created_at.desc()).all()
+
+
+@app.post("/api/listings", response_model=schemas.ListingOut, status_code=201)
+def api_listing_create(
+    data: schemas.ListingCreate,
+    user: models.User = Depends(api_user),
+    db: Session = Depends(get_db),
+):
+    if user.role not in ("publisher", "admin"):
+        raise HTTPException(status_code=403, detail="Only publishers can create listings")
+    listing = models.Listing(publisher_id=user.id, **data.model_dump())
+    db.add(listing)
+    db.commit()
+    db.refresh(listing)
+    return listing
+
+
+@app.post("/api/orders", response_model=schemas.OrderOut, status_code=201)
+def api_order_create(
+    data: schemas.OrderCreate,
+    user: models.User = Depends(api_user),
+    db: Session = Depends(get_db),
+):
+    if user.role != "advertiser":
+        raise HTTPException(status_code=403, detail="Only advertisers can place orders")
+    listing = db.query(models.Listing).filter(models.Listing.id == data.listing_id).first()
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if not listing.is_active:
+        raise HTTPException(status_code=400, detail="Listing is not active")
+    order = models.Order(
+        listing_id=listing.id,
+        advertiser_id=user.id,
+        publisher_id=listing.publisher_id,
+        brief=data.brief,
+        target_url=data.target_url,
+        anchor_text=data.anchor_text,
+        status="requested",
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    orders_mod._notify(db, order, "requested")
+    return order
+
+
+@app.get("/api/orders/{order_id}", response_model=schemas.OrderOut)
+def api_order_get(
+    order_id: int,
+    user: models.User = Depends(api_user),
+    db: Session = Depends(get_db),
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if user.role != "admin" and user.id not in (order.advertiser_id, order.publisher_id):
+        raise HTTPException(status_code=403, detail="You cannot view this order")
+    return order
+
+
+@app.post("/api/orders/{order_id}/status", response_model=schemas.OrderOut)
+def api_order_status(
+    order_id: int,
+    data: schemas.StatusUpdate,
+    user: models.User = Depends(api_user),
+    db: Session = Depends(get_db),
+):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if user.id not in (order.advertiser_id, order.publisher_id):
+        raise HTTPException(status_code=403, detail="Only the order's publisher or advertiser can change its status")
+    try:
+        orders_mod.change_status(db, order, user, data.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return order
 
 
 # ---------- Admin ----------
