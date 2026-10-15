@@ -135,11 +135,206 @@ def logout():
     return response
 
 
-# ---------- Dashboard (role aware, extended in later steps) ----------
+# ---------- Dashboard (role aware) ----------
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     user, redirect = current_user_or_redirect(request, db)
     if redirect:
         return redirect
-    return render(request, "dashboard.html", db)
+    ctx = {}
+    if user.role == "publisher":
+        ctx["my_listings"] = (
+            db.query(models.Listing)
+            .filter(models.Listing.publisher_id == user.id)
+            .order_by(models.Listing.created_at.desc())
+            .all()
+        )
+    return render(request, "dashboard.html", db, ctx)
+
+
+# ---------- Marketplace browse ----------
+
+@app.get("/marketplace", response_class=HTMLResponse)
+def marketplace(
+    request: Request,
+    niche: str = "",
+    min_price: str = "",
+    max_price: str = "",
+    q: str = "",
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.Listing).filter(models.Listing.is_active.is_(True))
+    if niche:
+        query = query.filter(models.Listing.niche == niche)
+    if min_price:
+        try:
+            query = query.filter(models.Listing.price_usd >= float(min_price))
+        except ValueError:
+            pass
+    if max_price:
+        try:
+            query = query.filter(models.Listing.price_usd <= float(max_price))
+        except ValueError:
+            pass
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (models.Listing.site_name.ilike(like)) | (models.Listing.niche.ilike(like))
+        )
+    listings = query.order_by(models.Listing.created_at.desc()).all()
+    niches = [
+        row[0]
+        for row in db.query(models.Listing.niche)
+        .filter(models.Listing.is_active.is_(True))
+        .distinct()
+        .order_by(models.Listing.niche)
+        .all()
+    ]
+    return render(
+        request,
+        "marketplace.html",
+        db,
+        {
+            "listings": listings,
+            "niches": niches,
+            "filters": {"niche": niche, "min_price": min_price, "max_price": max_price, "q": q},
+        },
+    )
+
+
+# ---------- Listings CRUD (publishers) ----------
+
+def publisher_or_403(request: Request, db: Session):
+    user, redirect = current_user_or_redirect(request, db)
+    if redirect:
+        return None, None, redirect
+    if user.role not in ("publisher", "admin"):
+        return None, None, render(request, "error.html", db,
+                                  message="Only publishers can manage listings.",
+                                  status_code=403)
+    return user, db, None
+
+
+@app.get("/listings/new", response_class=HTMLResponse)
+def listing_new_form(request: Request, db: Session = Depends(get_db)):
+    user, _, denied = publisher_or_403(request, db)
+    if denied:
+        return denied
+    return render(request, "listing_form.html", db, {"listing": None})
+
+
+@app.post("/listings")
+def listing_create(
+    request: Request,
+    site_name: str = Form(...),
+    site_url: str = Form(...),
+    niche: str = Form(...),
+    price_usd: float = Form(...),
+    turnaround_days: int = Form(...),
+    guidelines: str = Form(""),
+    da_score: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user, _, denied = publisher_or_403(request, db)
+    if denied:
+        return denied
+    try:
+        da = int(da_score) if da_score.strip() else None
+    except ValueError:
+        da = None
+    listing = models.Listing(
+        publisher_id=user.id,
+        site_name=site_name.strip(),
+        site_url=site_url.strip(),
+        niche=niche.strip(),
+        price_usd=price_usd,
+        turnaround_days=turnaround_days,
+        guidelines=guidelines.strip(),
+        da_score=da,
+    )
+    db.add(listing)
+    db.commit()
+    return RedirectResponse(f"/listings/{listing.id}?msg=Listing+published", status_code=303)
+
+
+@app.get("/listings/{listing_id}", response_class=HTMLResponse)
+def listing_detail(request: Request, listing_id: int, db: Session = Depends(get_db)):
+    listing = db.query(models.Listing).filter(models.Listing.id == listing_id).first()
+    if not listing:
+        return render(request, "error.html", db, message="Listing not found.", status_code=404)
+    return render(request, "listing_detail.html", db, {"listing": listing})
+
+
+def listing_owner_or_403(request: Request, db: Session, listing_id: int):
+    user, redirect = current_user_or_redirect(request, db)
+    if redirect:
+        return None, None, redirect
+    listing = db.query(models.Listing).filter(models.Listing.id == listing_id).first()
+    if not listing:
+        return None, None, render(request, "error.html", db,
+                                  message="Listing not found.", status_code=404)
+    if listing.publisher_id != user.id and user.role != "admin":
+        return None, None, render(request, "error.html", db,
+                                  message="You can only edit your own listings.",
+                                  status_code=403)
+    return user, listing, None
+
+
+@app.get("/listings/{listing_id}/edit", response_class=HTMLResponse)
+def listing_edit_form(request: Request, listing_id: int, db: Session = Depends(get_db)):
+    _, listing, denied = listing_owner_or_403(request, db, listing_id)
+    if denied:
+        return denied
+    return render(request, "listing_form.html", db, {"listing": listing})
+
+
+@app.post("/listings/{listing_id}/edit")
+def listing_edit(
+    request: Request,
+    listing_id: int,
+    site_name: str = Form(...),
+    site_url: str = Form(...),
+    niche: str = Form(...),
+    price_usd: float = Form(...),
+    turnaround_days: int = Form(...),
+    guidelines: str = Form(""),
+    da_score: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    _, listing, denied = listing_owner_or_403(request, db, listing_id)
+    if denied:
+        return denied
+    try:
+        da = int(da_score) if da_score.strip() else None
+    except ValueError:
+        da = None
+    listing.site_name = site_name.strip()
+    listing.site_url = site_url.strip()
+    listing.niche = niche.strip()
+    listing.price_usd = price_usd
+    listing.turnaround_days = turnaround_days
+    listing.guidelines = guidelines.strip()
+    listing.da_score = da
+    db.commit()
+    return RedirectResponse(f"/listings/{listing.id}?msg=Listing+updated", status_code=303)
+
+
+@app.post("/listings/{listing_id}/deactivate")
+def listing_deactivate(request: Request, listing_id: int, db: Session = Depends(get_db)):
+    _, listing, denied = listing_owner_or_403(request, db, listing_id)
+    if denied:
+        return denied
+    listing.is_active = False
+    db.commit()
+    return RedirectResponse(f"/listings/{listing.id}?msg=Listing+deactivated", status_code=303)
+
+
+@app.post("/listings/{listing_id}/activate")
+def listing_activate(request: Request, listing_id: int, db: Session = Depends(get_db)):
+    _, listing, denied = listing_owner_or_403(request, db, listing_id)
+    if denied:
+        return denied
+    listing.is_active = True
+    db.commit()
+    return RedirectResponse(f"/listings/{listing.id}?msg=Listing+activated", status_code=303)

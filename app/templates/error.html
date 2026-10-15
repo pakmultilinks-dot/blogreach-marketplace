@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}Error - BlogReach{% endblock %}
+{% block content %}
+<h1>Something went wrong</h1>
+<div class="flash flash-error">{{ message or "An unexpected error occurred." }}</div>
+<p><a href="/">Back to home</a></p>
+{% endblock %}

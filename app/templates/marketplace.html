@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Marketplace - BlogReach{% endblock %}
+{% block content %}
+<h1>Marketplace</h1>
+<form method="get" action="/marketplace" class="filters">
+  <label>Search
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="site name or keyword">
+  </label>
+  <label>Niche
+    <select name="niche">
+      <option value="">All niches</option>
+      {% for n in niches %}
+        <option value="{{ n }}" {% if filters.niche == n %}selected{% endif %}>{{ n }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Min price
+    <input type="number" name="min_price" min="0" step="0.01" value="{{ filters.min_price }}">
+  </label>
+  <label>Max price
+    <input type="number" name="max_price" min="0" step="0.01" value="{{ filters.max_price }}">
+  </label>
+  <button class="btn btn-small" type="submit">Filter</button>
+</form>
+
+{% if listings %}
+  <div class="cards">
+    {% for l in listings %}
+      <article class="card">
+        <h3><a href="/listings/{{ l.id }}">{{ l.site_name }}</a></h3>
+        <p class="muted">{{ l.niche }}{% if l.da_score %} - DA {{ l.da_score }}{% endif %}</p>
+        <p class="price">${{ "%.2f"|format(l.price_usd) }}</p>
+        <p class="muted">{{ l.turnaround_days }} day turnaround - by {{ l.publisher.name }}</p>
+      </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted">No listings match your filters.</p>
+{% endif %}
+{% endblock %}

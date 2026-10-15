@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{% if listing %}Edit listing{% else %}New listing{% endif %} - BlogReach{% endblock %}
+{% block content %}
+<h1>{% if listing %}Edit listing{% else %}Add a new site listing{% endif %}</h1>
+<form method="post" action="{% if listing %}/listings/{{ listing.id }}/edit{% else %}/listings{% endif %}" class="form-card">
+  <label>Site name
+    <input type="text" name="site_name" required maxlength="200" value="{{ listing.site_name if listing else '' }}">
+  </label>
+  <label>Site URL
+    <input type="url" name="site_url" required maxlength="500" placeholder="https://example.com" value="{{ listing.site_url if listing else '' }}">
+  </label>
+  <label>Niche
+    <input type="text" name="niche" required maxlength="100" placeholder="e.g. SEO, Tech, Health" value="{{ listing.niche if listing else '' }}">
+  </label>
+  <label>Price (USD)
+    <input type="number" name="price_usd" required min="1" step="0.01" value="{{ listing.price_usd if listing else '' }}">
+  </label>
+  <label>Turnaround (days)
+    <input type="number" name="turnaround_days" required min="1" step="1" value="{{ listing.turnaround_days if listing else '5' }}">
+  </label>
+  <label>Domain Authority (optional)
+    <input type="number" name="da_score" min="1" max="100" step="1" value="{{ listing.da_score if listing and listing.da_score else '' }}">
+  </label>
+  <label>Editorial guidelines
+    <textarea name="guidelines" maxlength="5000">{{ listing.guidelines if listing else '' }}</textarea>
+  </label>
+  <button class="btn" type="submit">{% if listing %}Save changes{% else %}Publish listing{% endif %}</button>
+</form>
+{% endblock %}

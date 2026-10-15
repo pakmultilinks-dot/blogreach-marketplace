@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.site_name }} - BlogReach{% endblock %}
+{% block content %}
+<div class="detail-grid">
+  <div class="panel">
+    <h2>{{ listing.site_name }}</h2>
+    <p><a href="{{ listing.site_url }}" target="_blank" rel="noopener">{{ listing.site_url }}</a></p>
+    <p><strong>Niche:</strong> {{ listing.niche }}</p>
+    <p><strong>Price:</strong> ${{ "%.2f"|format(listing.price_usd) }}</p>
+    <p><strong>Turnaround:</strong> {{ listing.turnaround_days }} days</p>
+    {% if listing.da_score %}<p><strong>Domain Authority:</strong> {{ listing.da_score }}</p>{% endif %}
+    <p><strong>Publisher:</strong> {{ listing.publisher.name }}</p>
+    <p><strong>Status:</strong> {% if listing.is_active %}Active{% else %}Inactive{% endif %}</p>
+    {% if listing.guidelines %}
+      <h3>Editorial guidelines</h3>
+      <p>{{ listing.guidelines }}</p>
+    {% endif %}
+    {% if user and user.id == listing.publisher_id %}
+      <div class="actions-row">
+        <a class="btn btn-small" href="/listings/{{ listing.id }}/edit">Edit</a>
+        {% if listing.is_active %}
+          <form method="post" action="/listings/{{ listing.id }}/deactivate" class="inline-form">
+            <button class="btn btn-small btn-danger" type="submit">Deactivate</button>
+          </form>
+        {% else %}
+          <form method="post" action="/listings/{{ listing.id }}/activate" class="inline-form">
+            <button class="btn btn-small btn-success" type="submit">Activate</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    {% if user and user.role == "advertiser" and listing.is_active %}
+      <h2>Place an order</h2>
+      <form method="post" action="/listings/{{ listing.id }}/orders" class="form-card" style="border:none;padding:0;">
+        <label>Brief for the publisher
+          <textarea name="brief" required maxlength="5000" placeholder="Topic, angle, word count, special requirements"></textarea>
+        </label>
+        <label>Target URL
+          <input type="url" name="target_url" required maxlength="500" placeholder="https://yoursite.com/page">
+        </label>
+        <label>Anchor text
+          <input type="text" name="anchor_text" required maxlength="200" placeholder="your keyword phrase">
+        </label>
+        <button class="btn" type="submit">Continue to mock payment</button>
+      </form>
+    {% elif not user %}
+      <h2>Place an order</h2>
+      <p><a href="/login">Login</a> as an advertiser to order a placement on this site.</p>
+    {% elif user.role == "publisher" and user.id != listing.publisher_id %}
+      <p class="muted">Only advertisers can place orders.</p>
+    {% elif not listing.is_active %}
+      <p class="muted">This listing is currently inactive.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

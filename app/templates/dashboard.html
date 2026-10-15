@@ -8,7 +8,26 @@
   <section>
     <h2>My listings</h2>
     <p><a class="btn btn-small" href="/listings/new">Add new listing</a></p>
-    <p class="muted">Listing management is coming in the next build step.</p>
+    {% if my_listings %}
+      <table class="data">
+        <tr><th>Site</th><th>Niche</th><th>Price</th><th>Status</th><th></th></tr>
+        {% for l in my_listings %}
+          <tr>
+            <td><a href="/listings/{{ l.id }}">{{ l.site_name }}</a></td>
+            <td>{{ l.niche }}</td>
+            <td>${{ "%.2f"|format(l.price_usd) }}</td>
+            <td>{% if l.is_active %}Active{% else %}Inactive{% endif %}</td>
+            <td><a href="/listings/{{ l.id }}/edit">Edit</a></td>
+          </tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="muted">You have no listings yet.</p>
+    {% endif %}
+  </section>
+  <section>
+    <h2>Incoming orders</h2>
+    <p class="muted">Order management is coming in the next build step.</p>
   </section>
 {% elif user.role == "advertiser" %}
   <section>
